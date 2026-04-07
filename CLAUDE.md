@@ -15,18 +15,28 @@ uv run testmo-mcp.py
 uv run mcp dev testmo-mcp.py
 ```
 
+## Environment
+
+Requires `TESTMO_URL` and `TESTMO_API_KEY` in `.env` (auto-loaded via python-dotenv).
+
 ## Architecture
 
-This is a Python MCP (Model Context Protocol) server built with [FastMCP](https://github.com/jlowin/fastmcp). It exposes tools that AI assistants can call via the stdio transport.
+Single-file FastMCP server (`testmo-mcp.py`) that wraps the Testmo REST API into 44 MCP tools. Runs over stdio transport.
 
-- **`testmo-mcp.py`** — main implementation; all MCP tools are defined here using the `@mcp.tool()` decorator
-- **`main.py`** — stub entry point, not used for the MCP server
-- The server runs over stdio (`mcp.run(transport="stdio")`), which is how MCP clients (e.g. Claude Desktop) connect to it
+### Sections in testmo-mcp.py
 
-### Tool pattern
+1. **Config** — `FIELD_MAPPINGS` dict with all Testmo field value IDs (priorities, types, states, etc.)
+2. **HTTP Client** — `_request()` for JSON API calls, `_upload_file()` for multipart uploads. Each call creates a fresh `httpx.AsyncClient` (no persistent connection).
+3. **Tools by domain** — Projects, Folders, Milestones, Cases (CRUD + search + batch), Runs, Run Results, Attachments, Automation Sources, Automation Runs (full lifecycle with threads), Issue Connections, Composite (recursive folder/case operations), Utility.
 
-Each tool is an `async` function decorated with `@mcp.tool()`. Tools call external APIs via `httpx.AsyncClient`. Return value is always a plain string that gets sent back to the caller.
+### Tool naming
+
+All tools are prefixed `testmo_` and use snake_case matching the Testmo API resource (e.g. `testmo_list_cases`, `testmo_batch_update_cases`).
+
+### Pagination & rate limiting
+
+Auto-pagination helpers (e.g. `_get_all_folders`, `testmo_get_all_cases`) loop through pages with a 0.5s delay between requests. Batch operations (create/delete) auto-chunk at 100 items per request.
 
 ### Dependencies
 
-Managed with `uv`. Python 3.14 required (see `.python-version`). Key deps: `mcp[cli]` for the server framework, `httpx` for HTTP calls.
+Managed with `uv`. Python 3.14. Key deps: `mcp[cli]`, `httpx`, `python-dotenv`.
