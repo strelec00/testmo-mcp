@@ -39,6 +39,38 @@ Built for QA engineers, SDETs, and developers who use Testmo and want to stop cl
 
 ### Installation
 
+**Testmo MCP** is an open-source MCP server that connects AI assistants like **Claude Desktop**, **Claude Code**, and **Cursor** directly to your **Testmo test management** instance. Manage test cases, folders, milestones, runs, attachments, and CI/CD automation sources — all through natural language, without leaving your AI client.
+
+Built for QA engineers, SDETs, and developers who use Testmo and want to stop clicking through the UI for repetitive work. Powered by [FastMCP](https://github.com/jlowin/fastmcp) and the Testmo REST API.
+
+---
+
+## ✨ Features
+
+- 🧪 **Full test case management** — create, read, update, delete, search, and bulk-operate on Testmo cases
+- 📁 **Folder operations** — create, rename, move, delete, and traverse folder trees recursively
+- 🚀 **Bulk & batch operations** — create or update up to 100 cases per call, or unlimited with auto-batching
+- 🏃 **Test runs & results** — list runs, fetch run details, and filter run results
+- 🎯 **Milestones** — list and inspect milestones across projects
+- 📎 **Attachments** — upload, list, and delete file attachments on test cases
+- 🤖 **CI/CD automation sources** — manage automation runs, parallel threads, and result submission
+- 🔗 **Issue integrations** — list GitHub, Jira, and other issue connections
+- 🌳 **Recursive helpers** — fetch entire folder subtrees of cases in one call
+- 🛠️ **Field mapping utilities** — resolve priority, type, and state IDs without guessing
+- 🤝 **Works with any MCP client** — Claude Desktop, Claude Code, Cursor, Cline, and more
+
+---
+
+## 🚀 Quick start
+
+### Prerequisites
+
+- Python 3.11 or newer
+- [`uv`](https://github.com/astral-sh/uv) package manager
+- A Testmo instance and API key (**Settings → API Keys** in Testmo)
+- An MCP-compatible client (Claude Desktop, Cursor, etc.)
+
+### Installation
 ```bash
 git clone https://github.com/strelec00/testmo-mcp.git
 cd testmo-mcp
@@ -61,6 +93,8 @@ Add this to your Claude Desktop config file:
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
@@ -91,6 +125,7 @@ Open **Cursor Settings → MCP** (or edit `~/.cursor/mcp.json`) and use the same
 
 ### Dev / testing mode
 
+### Dev / testing mode
 ```bash
 uv run mcp dev testmo-mcp.py
 ```
@@ -124,14 +159,16 @@ Traditional Testmo workflows require navigating the UI for every test case, ever
 
 ## 🔧 Available tools
 
-### Projects
+## 💬 Example prompts
 
-| Tool                   | Description         |
-| ---------------------- | ------------------- |
-| `testmo_list_projects` | List all projects   |
-| `testmo_get_project`   | Get project details |
+Once connected, try asking your AI assistant:
 
-### Folders
+- *"List all projects in Testmo and show me the one called Certilligent."*
+- *"Create 20 login test cases covering valid credentials, wrong password, locked account, expired session, and 2FA flows."*
+- *"Find the 'Smoke Tests' folder and list every high-priority case inside it recursively."*
+- *"Bulk update all draft cases in folder 42 to set their priority to high."*
+- *"Show me the latest automation run for the Playwright source and append a new thread of results."*
+- *"Upload this screenshot as an attachment to test case 1234."*
 
 | Tool                         | Description                  |
 | ---------------------------- | ---------------------------- |
@@ -158,19 +195,39 @@ Traditional Testmo workflows require navigating the UI for every test case, ever
 | `testmo_batch_delete_cases` | Delete multiple cases (auto-batched)  |
 | `testmo_search_cases`       | Search cases with filters             |
 
-### Milestones
+## 🧠 Why use Testmo with MCP?
 
-| Tool                     | Description           |
-| ------------------------ | --------------------- |
-| `testmo_list_milestones` | List milestones       |
-| `testmo_get_milestone`   | Get milestone details |
+Traditional Testmo workflows require navigating the UI for every test case, every folder, every bulk update. With **Testmo MCP**, your AI assistant becomes a QA co-pilot:
+
+- Spin up entire test suites from a feature spec or PRD in seconds
+- Refactor folder structures conversationally instead of click-by-click
+- Keep Testmo in sync with your codebase without context-switching
+- Pair with **Claude Code** for end-to-end QA automation: generate Playwright tests *and* register them in Testmo
+- Wire CI/CD automation runs straight from your terminal session
+
+---
+
+## 🔧 Available tools
+
+### Projects
+| Tool | Description |
+|------|-------------|
+| `testmo_list_projects` | List all projects |
+| `testmo_get_project` | Get project details |
 
 ### Test runs
 
-| Tool                      | Description                   |
-| ------------------------- | ----------------------------- |
-| `testmo_list_runs`        | List test runs                |
-| `testmo_get_run`          | Get run details               |
+### Milestones
+| Tool | Description |
+|------|-------------|
+| `testmo_list_milestones` | List milestones |
+| `testmo_get_milestone` | Get milestone details |
+
+### Test runs
+| Tool | Description |
+|------|-------------|
+| `testmo_list_runs` | List test runs |
+| `testmo_get_run` | Get run details |
 | `testmo_list_run_results` | List run results with filters |
 
 ### Attachments
@@ -205,16 +262,16 @@ Traditional Testmo workflows require navigating the UI for every test case, ever
 
 ### Recursive / composite
 
-| Tool                            | Description                    |
-| ------------------------------- | ------------------------------ |
-| `testmo_get_folders_recursive`  | Get folder tree                |
-| `testmo_get_cases_recursive`    | Get all cases from folder tree |
-| `testmo_search_cases_recursive` | Search within folder subtree   |
+### Recursive / composite
+| Tool | Description |
+|------|-------------|
+| `testmo_get_folders_recursive` | Get folder tree |
+| `testmo_get_cases_recursive` | Get all cases from folder tree |
+| `testmo_search_cases_recursive` | Search within folder subtree |
 
 ### Utility
-
-| Tool                        | Description                                     |
-| --------------------------- | ----------------------------------------------- |
+| Tool | Description |
+|------|-------------|
 | `testmo_get_field_mappings` | Get field value IDs (priorities, types, states) |
 | `testmo_get_web_url`        | Generate Testmo web URL                         |
 
