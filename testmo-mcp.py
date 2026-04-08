@@ -6,12 +6,15 @@ runs, automation runs, attachments, and more via the Testmo REST API.
 """
 
 import asyncio
-import base64
-import binascii
+import io
 import json
+import mimetypes
 import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 import httpx
 from dotenv import load_dotenv
@@ -28,6 +31,7 @@ mcp = FastMCP("testmo-mcp")
 TESTMO_URL = os.environ.get("TESTMO_URL", "").rstrip("/")
 TESTMO_API_KEY = os.environ.get("TESTMO_API_KEY", "")
 REQUEST_TIMEOUT = 30.0
+UPLOAD_TIMEOUT = 300.0
 RATE_LIMIT_DELAY = 0.5
 MAX_CASES_PER_REQUEST = 100
 
@@ -125,13 +129,14 @@ def _get_client() -> httpx.AsyncClient:
     if not TESTMO_API_KEY:
         raise ValueError("TESTMO_API_KEY environment variable not set")
     return httpx.AsyncClient(
-        base_url=f"{TESTMO_URL}/api/v1",
+        base_url=f"{TESTMO_URL}/api/v1/",
         headers={
             "Authorization": f"Bearer {TESTMO_API_KEY}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
         timeout=httpx.Timeout(REQUEST_TIMEOUT),
+    
     )
 
 
@@ -162,27 +167,22 @@ async def _request(
         return response.json()
 
 
-async def _upload_file(
+async def _upload(
     endpoint: str,
-    filename: str,
-    file_content: bytes,
-    content_type: str,
+    files: list[tuple[str, tuple[str, bytes, str]]],
 ) -> dict[str, Any]:
-    """Upload a file via multipart form (no Content-Type: json header)."""
+    """Upload one or more files via multipart form."""
     if not TESTMO_URL or not TESTMO_API_KEY:
         raise ValueError("TESTMO_URL and TESTMO_API_KEY must be set")
     async with httpx.AsyncClient(
-        base_url=f"{TESTMO_URL}/api/v1",
+        base_url=f"{TESTMO_URL}/api/v1/",
         headers={
             "Authorization": f"Bearer {TESTMO_API_KEY}",
             "Accept": "application/json",
         },
-        timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        timeout=httpx.Timeout(UPLOAD_TIMEOUT),
     ) as client:
-        response = await client.post(
-            endpoint,
-            files={"file": (filename, file_content, content_type)},
-        )
+        response = await client.post(endpoint, files=files)
         if response.status_code == 204:
             return {"success": True}
         if response.status_code >= 400:
@@ -274,8 +274,11 @@ async def testmo_get_folder(project_id: int, folder_id: int) -> dict[str, Any]:
         project_id: The project ID.
         folder_id: The folder ID.
     """
-    result = await _request("GET", f"/projects/{project_id}/folders/{folder_id}")
-    return result.get("result", result)
+    folders = await _get_all_folders(project_id)
+    for folder in folders:
+        if folder["id"] == folder_id:
+            return folder
+    raise RuntimeError(f"Folder {folder_id} not found in project {project_id}")
 
 
 @mcp.tool()
@@ -876,33 +879,84 @@ async def testmo_list_case_attachments(
     return await _request("GET", f"/cases/{case_id}/attachments", params=params)
 
 
+MAX_IMAGE_SIZE = 1_000_000  # 1 MB — compress images larger than this
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+
+
+def _prepare_file(file_path: str) -> tuple[str, bytes, str]:
+    """Read a file and compress it if it's a large image. Returns (filename, content, content_type)."""
+    path = Path(file_path)
+    if not path.exists():
+        raise ValueError(f"File not found: {file_path}")
+    file_content = path.read_bytes()
+    suffix = path.suffix.lower()
+    if suffix in IMAGE_EXTENSIONS and len(file_content) > MAX_IMAGE_SIZE:
+        img = Image.open(io.BytesIO(file_content))
+        img = img.convert("RGB")
+        buf = io.BytesIO()
+        quality = 85
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        while buf.tell() > MAX_IMAGE_SIZE and quality > 20:
+            quality -= 10
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+        file_content = buf.getvalue()
+        filename = path.stem + ".jpg"
+        content_type = "image/jpeg"
+    else:
+        filename = path.name
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return filename, file_content, content_type
+
+
 @mcp.tool()
 async def testmo_upload_case_attachment(
     case_id: int,
-    filename: str,
-    content_base64: str,
-    content_type: str = "application/octet-stream",
+    file_path: str,
 ) -> dict[str, Any]:
-    """Upload a file attachment to a test case.
+    """Upload a single file attachment to a test case. Large images are auto-compressed.
 
-    Common content types: image/png, image/jpeg, application/pdf, text/plain, application/json.
+    IMPORTANT: file_path must be an absolute path to a file saved on disk (e.g. /Users/jan/Desktop/screenshot.png).
+    Pasted images or image data from the conversation cannot be uploaded — the user must save the file first and provide its path.
+    If no path is provided or the user has not saved the file yet, ask them to save it and share the full file path.
 
     Args:
         case_id: The test case ID.
-        filename: Name of the file (e.g., 'screenshot.png').
-        content_base64: Base64-encoded file content.
-        content_type: MIME type (default: 'application/octet-stream').
+        file_path: Absolute path to the local file to upload (e.g. /Users/jan/Desktop/screenshot.png).
     """
-    try:
-        file_content = base64.b64decode(content_base64)
-    except binascii.Error as e:
-        raise ValueError(f"Invalid base64 content: {e}")
-    return await _upload_file(
+    if not file_path or not file_path.strip():
+        raise ValueError("file_path is required. Ask the user to save the file to disk and provide the full path (e.g. /Users/jan/Desktop/screenshot.png).")
+    filename, file_content, content_type = _prepare_file(file_path)
+    return await _upload(
         f"/cases/{case_id}/attachments/single",
-        filename,
-        file_content,
-        content_type,
+        [("file", (filename, file_content, content_type))],
     )
+
+
+@mcp.tool()
+async def testmo_upload_case_attachments(
+    case_id: int,
+    file_paths: list[str],
+) -> dict[str, Any]:
+    """Upload up to 20 file attachments to a test case in one request. Large images are auto-compressed.
+
+    IMPORTANT: Each path must be an absolute path to a file saved on disk.
+    Pasted images or image data from the conversation cannot be uploaded — the user must save the files first.
+    If no paths are provided, ask the user to save the files and share their full paths.
+
+    Args:
+        case_id: The test case ID.
+        file_paths: List of absolute paths to local files to upload (max 20).
+    """
+    if not file_paths:
+        raise ValueError("file_paths must not be empty")
+    if len(file_paths) > 20:
+        file_paths = file_paths[:20]
+    files = []
+    for fp in file_paths:
+        filename, file_content, content_type = _prepare_file(fp)
+        files.append(("file", (filename, file_content, content_type)))
+    return await _upload(f"/cases/{case_id}/attachments", files)
 
 
 @mcp.tool()
