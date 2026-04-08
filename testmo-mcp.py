@@ -335,7 +335,8 @@ async def testmo_update_folder(
     if display_order is not None:
         data["display_order"] = display_order
     result = await _request("PATCH", f"/projects/{project_id}/folders", data=data)
-    return result.get("result", result)
+    updated = result.get("result", [])
+    return updated[0] if updated else result
 
 
 @mcp.tool()
@@ -483,8 +484,18 @@ async def testmo_get_case(project_id: int, case_id: int) -> dict[str, Any]:
         project_id: The project ID.
         case_id: The test case ID.
     """
-    result = await _request("GET", f"/projects/{project_id}/cases/{case_id}")
-    return result.get("result", result)
+    page = 1
+    while True:
+        params: dict[str, Any] = {"page": page, "per_page": 100}
+        result = await _request("GET", f"/projects/{project_id}/cases", params=params)
+        for case in result.get("result", []):
+            if case["id"] == case_id:
+                return case
+        if result.get("next_page") is None:
+            break
+        page += 1
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+    raise RuntimeError(f"Case {case_id} not found in project {project_id}")
 
 
 @mcp.tool()
@@ -666,7 +677,8 @@ async def testmo_batch_update_cases(
     if issues is not None:
         payload["issues"] = issues
     result = await _request("PATCH", f"/projects/{project_id}/cases", data=payload)
-    return result.get("result", result)
+    updated = result.get("result", [])
+    return {"result": updated, "total_updated": len(updated)}
 
 
 @mcp.tool()
@@ -1431,6 +1443,7 @@ async def _search_paginated(
     folder_id: int | None,
     tags: list[str] | None,
     state_id: int | None,
+    expands: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Auto-paginate search_cases results."""
     all_cases: list[dict[str, Any]] = []
@@ -1445,6 +1458,8 @@ async def _search_paginated(
             params["tags"] = ",".join(tags)
         if state_id is not None:
             params["state_id"] = state_id
+        if expands:
+            params["expands"] = ",".join(expands)
         result = await _request("GET", f"/projects/{project_id}/cases", params=params)
         all_cases.extend(result.get("result", []))
         if result.get("next_page") is None:
@@ -1460,8 +1475,18 @@ def _apply_client_filters(
     match_mode: str,
     array_filters: dict[str, list[Any]] | None,
     issue_key: str | None,
+    tags_filter: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     result = cases
+
+    if tags_filter:
+        tag_set = set(tags_filter)
+        def _match_tags(case: dict[str, Any]) -> bool:
+            case_tag_names = {
+                t["name"] for t in case.get("tags", []) if isinstance(t, dict)
+            }
+            return bool(case_tag_names & tag_set)
+        result = [c for c in result if _match_tags(c)]
 
     if custom_filters:
         def _match(case: dict[str, Any]) -> bool:
