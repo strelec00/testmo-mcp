@@ -21,13 +21,31 @@ Requires `TESTMO_URL` and `TESTMO_API_KEY` in `.env` (auto-loaded via python-dot
 
 ## Architecture
 
-Single-file FastMCP server (`testmo-mcp.py`) that wraps the Testmo REST API into 44 MCP tools. Runs over stdio transport.
+`testmo-mcp.py` is a thin entry point that imports the `testmo/` package and runs the server. Tools are split into domain modules under `testmo/tools/`. 45 MCP tools total. Runs over stdio transport.
 
-### Sections in testmo-mcp.py
+### Package layout
 
-1. **Config** — `FIELD_MAPPINGS` dict with all Testmo field value IDs (priorities, types, states, etc.)
-2. **HTTP Client** — `_request()` for JSON API calls, `_upload_file()` for multipart uploads. Each call creates a fresh `httpx.AsyncClient` (no persistent connection).
-3. **Tools by domain** — Projects, Folders, Milestones, Cases (CRUD + search + batch), Runs, Run Results, Attachments, Automation Sources, Automation Runs (full lifecycle with threads), Issue Connections, Composite (recursive folder/case operations), Utility.
+```
+testmo/
+  server.py        # FastMCP instance + load_dotenv
+  config.py        # Constants (timeouts, limits) + FIELD_MAPPINGS
+  client.py        # _request() and _upload() HTTP helpers
+  tools/
+    projects.py    # list_projects, get_project
+    folders.py     # CRUD + find_folder_by_name; exports _get_all_folders helper
+    milestones.py  # list_milestones, get_milestone
+    cases.py       # CRUD + batch + search (11 tools)
+    runs.py        # list_runs, get_run, list_run_results
+    attachments.py # list/upload/delete case attachments (4 tools)
+    automation.py  # Sources + runs + threads (9 tools)
+    issues.py      # list/get issue connections
+    composite.py   # Recursive folder/case ops + advanced search (3 tools)
+    utility.py     # get_field_mappings, get_web_url
+```
+
+### HTTP Client
+
+`_request()` for JSON API calls, `_upload()` for multipart uploads. Each call creates a fresh `httpx.AsyncClient` (no persistent connection).
 
 ### Tool naming
 
