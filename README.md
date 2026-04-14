@@ -95,7 +95,7 @@ Once connected, try asking your AI assistant:
 - _"Find the 'Smoke Tests' folder and list every high-priority case inside it recursively."_
 - _"Bulk update all draft cases in folder 42 to set their priority to high."_
 - _"Show me the latest automation run for the Playwright source and append a new thread of results."_
-- _"Upload this screenshot as an attachment to test case 1234."_
+- _"Upload the file at `/Users/jan/Desktop/screenshot.png` as an attachment to test case 1234."_
 
 ---
 
@@ -128,8 +128,10 @@ Traditional Testmo workflows require navigating the UI for every test case, ever
 | `testmo_get_folder`          | Get details of a specific folder                     |
 | `testmo_create_folder`       | Create a new folder (optionally nested under parent) |
 | `testmo_update_folder`       | Update folder name, parent, docs, or display order   |
-| `testmo_delete_folder`       | Delete a folder and all its test cases               |
+| `testmo_delete_folder`       | ⚠️ Delete a folder — **also permanently deletes all test cases inside** |
 | `testmo_find_folder_by_name` | Find a folder by name within a project               |
+
+> ⚠️ **`testmo_delete_folder` is irreversible.** Deleting a folder removes all test cases it contains, including cases in nested subfolders. There is no trash or undo — verify the folder contents before deleting.
 
 ### Milestones
 
@@ -170,6 +172,10 @@ Traditional Testmo workflows require navigating the UI for every test case, ever
 | `testmo_upload_case_attachment`  | Upload a single file (auto-compress) |
 | `testmo_upload_case_attachments` | Upload up to 20 files at once        |
 | `testmo_delete_case_attachments` | Delete one or more attachments       |
+
+> ⚠️ **`testmo_upload_case_attachment` and `testmo_upload_case_attachments` require an absolute local file path** (e.g. `/Users/jan/Desktop/screenshot.png` on macOS or `C:\Users\jan\Desktop\screenshot.png` on Windows). The file must already exist on disk — image data pasted into the conversation or screenshots taken within the AI client cannot be uploaded directly. Save the file to disk first, then provide the full path.
+>
+> After uploading, use `testmo_list_case_attachments` to retrieve the attachment URL (e.g. `https://your-instance.testmo.net/attachments/view/9`) and confirm the upload succeeded.
 
 ### Automation (CI/CD)
 
